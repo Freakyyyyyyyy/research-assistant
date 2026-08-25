@@ -129,7 +129,10 @@ def test_literature_failure_emits_safe_error_event(tmp_path) -> None:
 
         async def stream_chat(self, messages):
             del messages
-            yield '{"english_query":"vehicle routing"}'
+            yield (
+                '{"is_broad":false,"core_query":"vehicle routing",'
+                '"subqueries":[]}'
+            )
 
     database = Database(tmp_path / "test.sqlite3")
     database.create_schema()

@@ -1,51 +1,62 @@
-# 环境部署说明
+# 本地部署指南
 
-本文档只说明本地部署和其它电脑演示部署。不要把真实 API Key、`backend/.env`、数据库、上传论文或日志提交到 Git。
+本文档适用于 Windows 10/11 和 Linux/WSL 本地演示环境。
 
 ## 1. 环境要求
 
-- Windows 10/11 或 Linux/WSL。
-- Python：`>=3.9,<3.13`，推荐 3.9、3.10 或 3.11；不要使用 Python 3.13+。
-- Node.js：18+，本项目已在 Node 24 环境下验证构建。
-- Tesseract OCR：可选。普通文本 PDF 不依赖 OCR，扫描版 PDF 建议安装并配置。
-- 模型 API Key：需要百炼兼容 OpenAI API 的 Key，写入 `backend/.env`。
+- Python `>=3.9,<3.13`
+- Node.js `>=18`
+- Git
+- Tesseract OCR（可选）
+- 阿里云百炼 API Key
+
+检查版本：
+
+```powershell
+python --version
+node --version
+npm --version
+git --version
+```
 
 ## 2. 获取代码
-
-如果从 Git 获取代码：
 
 ```powershell
 git clone https://github.com/Freakyyyyyyyy/research-assistant.git
 cd research-assistant
 ```
 
-如果用 U 盘或压缩包拷贝到其它电脑，建议只拷贝源码和文档，不拷贝以下本地数据：
+## 3. Python 环境
 
-```text
-backend/.env
-data/
-exports/
-frontend/node_modules/
-frontend/dist/
-*.sqlite3
-*.log
+推荐使用独立虚拟环境。
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e "backend[test]"
 ```
 
-## 3. 配置后端
+Linux/WSL 激活命令：
 
-在项目根目录复制环境变量模板：
+```bash
+source .venv/bin/activate
+```
+
+## 4. 后端配置
 
 ```powershell
 Copy-Item backend\.env.example backend\.env
 ```
 
-编辑 `backend/.env`，至少填写：
+编辑 `backend/.env`：
 
 ```dotenv
-DASHSCOPE_API_KEY=填入你的百炼APIKey
+DASHSCOPE_API_KEY=replace-with-your-api-key
 QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_MODEL=qwen3.7-plus
 
+ROUTER_API_KEY=
 ROUTER_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 ROUTER_MODEL=deepseek-v4-flash
 ROUTER_DISABLE_THINKING=1
@@ -54,14 +65,16 @@ DATABASE_PATH=data/app.sqlite3
 UPLOAD_DIR=data/uploads
 ```
 
-如果安装了 Tesseract OCR，继续填写：
+`ROUTER_API_KEY` 为空时复用 `DASHSCOPE_API_KEY`。
+
+### OCR（可选）
 
 ```dotenv
 TESSERACT_EXECUTABLE=C:\Program Files\Tesseract-OCR\tesseract.exe
 OCR_LANGUAGE=chi_sim+eng
 ```
 
-隐私相关配置可选：
+### 隐私配置（可选）
 
 ```dotenv
 PRIVACY_PII_SCRUB=1
@@ -69,21 +82,7 @@ PRIVACY_LOCAL_ONLY=0
 PRIVACY_DATA_TTL_DAYS=0
 ```
 
-## 4. 安装依赖
-
-后端依赖：
-
-```powershell
-python -m pip install -e "backend[test]"
-```
-
-如果已经激活了目标 Python 环境，也可以写成：
-
-```powershell
-python -m pip install -e "backend[test]"
-```
-
-前端依赖：
+## 5. 前端依赖
 
 ```powershell
 cd frontend
@@ -91,109 +90,90 @@ npm install
 cd ..
 ```
 
-## 5. 启动项目
+## 6. 启动与停止
 
-方式一：Windows 一键启动。
-
-如果你已经激活了 Python 环境，直接运行：
+### Windows 脚本
 
 ```powershell
 .\dev-start.bat
 ```
 
-如果需要指定 Python 路径，先设置 `PYTHON_EXE`：
+停止：
 
 ```powershell
-$env:PYTHON_EXE="<你的 Python 路径>\python.exe"
+.\dev-stop.bat
+```
+
+`dev-start.bat` 默认使用当前环境中的 `python`。如需指定解释器：
+
+```powershell
+$env:PYTHON_EXE="C:\path\to\python.exe"
 .\dev-start.bat
 ```
 
-方式二：手动启动。
+### 手动启动
 
-终端 1 启动后端：
+终端 1：
 
 ```powershell
 python -m uvicorn research_agent.main:app --app-dir backend/src --host 127.0.0.1 --port 8000
 ```
 
-终端 2 启动前端：
+终端 2：
 
 ```powershell
 cd frontend
 npm run dev
 ```
 
-访问地址：
+## 7. 访问地址
 
 - 前端：`http://127.0.0.1:5173`
-- 后端健康检查：`http://127.0.0.1:8000/api/health`
-- 后端接口文档：`http://127.0.0.1:8000/docs`
+- 健康检查：`http://127.0.0.1:8000/api/health`
+- API 文档：`http://127.0.0.1:8000/docs`
 
-## 6. 本地验证
-
-前端构建：
+## 8. 验证
 
 ```powershell
+python -m pytest backend\tests -q
+
 cd frontend
+npm test
 npm run build
-cd ..
 ```
 
-后端测试：
+演示前建议检查：
 
-```powershell
-python -m pytest backend\tests -q --basetemp data\pytest-run-workflow
+1. 健康检查返回 `status: ok`。
+2. 普通对话可流式输出。
+3. 文献检索可返回 arXiv 论文。
+4. 收藏后的论文可在论文库中查看。
+5. PDF 上传或导入后可打开原文。
+6. 成果可查看、编辑和导出。
+
+## 9. 数据目录
+
+```text
+data/app.sqlite3
+data/uploads/
 ```
 
-测试完成后可以删除 `data\pytest-run-workflow`。不要删除 `data\app.sqlite3` 和 `data\uploads`，它们是运行数据。
+`backend/.env`、`data/`、`frontend/node_modules/` 和 `frontend/dist/` 不应随源码复制或提交。
 
-## 7. 演示前检查清单
-
-1. `http://127.0.0.1:8000/api/health` 返回 `status: ok`。
-2. 前端页面可以打开。
-3. 普通对话可以流式输出。
-4. 文献检索能返回候选论文。
-5. 收藏文献后能进入论文库。
-6. PDF 上传或导入后能打开 `/api/papers/{paper_id}/pdf`。
-7. 论文精读页能左侧对话、右侧显示论文。
-8. 项目成果卡片可以查看、编辑、删除和导出。
-9. 不在公开演示中使用含敏感信息的真实论文或真实个人数据。
-
-## 8. 常见问题
+## 10. 常见问题
 
 ### Python 版本不兼容
 
-如果安装依赖时报 `requires a different Python`，切换到 Python 3.9、3.10、3.11 或 3.12。
+使用 Python 3.9–3.12 重建虚拟环境。
 
-### 前端依赖安装失败
+### 模型不可用
 
-先确认 Node.js 和 npm：
+检查 `DASHSCOPE_API_KEY`、`QWEN_BASE_URL` 和模型名称，修改后重启后端。
 
-```powershell
-node -v
-npm -v
-```
+### 扫描型 PDF 没有可检索文本
 
-建议使用 Node.js 18+。
+安装 Tesseract，设置 `TESSERACT_EXECUTABLE` 和 `OCR_LANGUAGE`，然后重新导入 PDF。
 
-### 后端启动后模型不可用
+### 端口被占用
 
-检查 `backend/.env`：
-
-```dotenv
-DASHSCOPE_API_KEY=replace-with-your-api-key
-QWEN_MODEL=百炼兼容模式支持的模型名
-```
-
-修改 `.env` 后必须重启后端。
-
-### PDF 若精读没有原文
-
-确认对应论文已经上传或导入 PDF，并检查：
-
-```text
-data/uploads/
-http://127.0.0.1:8000/api/papers/{paper_id}/pdf
-```
-
-扫描版 PDF 需要配置 Tesseract OCR 才能获得更完整的文本。
+先运行 `dev-stop.bat`，或修改启动命令中的端口。

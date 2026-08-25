@@ -31,7 +31,7 @@ def test_literature_discovery_streams_real_candidate_structure(client) -> None:
 
     assert response.status_code == 200
     assert '"mode": "literature_discovery"' in body
-    assert body.count("event: stage") == 4
+    assert "event: stage" not in body
     assert "event: search_results" in body
     assert '"arxiv_id": "2401.00001"' in body
     assert "event: done" in body

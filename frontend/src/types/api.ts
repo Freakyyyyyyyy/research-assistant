@@ -233,16 +233,41 @@ export interface RecommendedPaper {
   purpose_labels: string[];
 }
 
+export interface LiteratureSubquery {
+  label: string;
+  english_query: string;
+}
+
+export interface LiteratureQueryPlan {
+  is_broad: boolean;
+  core_query: string;
+  subqueries: LiteratureSubquery[];
+}
+
+export interface LiteratureQueryExecution {
+  label: string;
+  english_query: string;
+  result_count: number;
+}
+
+export interface CandidateProvenance {
+  arxiv_id: string;
+  matched_query_labels: string[];
+  rrf_score: number;
+}
+
 export interface LiteratureDiscoveryResult {
   query: string;
+  query_plan: LiteratureQueryPlan;
+  query_executions: LiteratureQueryExecution[];
   candidates: ArxivPaper[];
+  candidate_provenance: CandidateProvenance[];
   recommendations: RecommendedPaper[];
 }
 
 export type StreamEventName =
   | 'mode'
   | 'metadata'
-  | 'stage'
   | 'search_results'
   | 'evidence'
   | 'artifact'

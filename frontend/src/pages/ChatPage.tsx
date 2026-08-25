@@ -49,16 +49,12 @@ import { CHAT_MODE_LABEL } from '@/types/api';
 import { describeMode } from '@/utils/chat';
 import { isUploaded } from '@/utils/paper';
 import {
-  removeLiveMessageDuplicates,
+  mergePersistedMessagesWithLiveTurns,
   resolveChatTarget,
   resolveRenderSessionId,
 } from '@/utils/sessionFlow';
 import { SearchResults } from '@/components/SearchResults';
-import {
-  StageProgress,
-  type StreamingStages,
-  useAutoScroll,
-} from '@/components/StageProgress';
+import { useAutoScroll } from '@/utils/useAutoScroll';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 
 const { TextArea } = Input;
@@ -141,7 +137,6 @@ export function ChatPage() {
   const [forcePaperReading, setForcePaperReading] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [stages, setStages] = useState<StreamingStages>({});
   const [lastSend, setLastSend] = useState<PendingSend | null>(null);
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const [composingNewSession, setComposingNewSession] = useState(false);
@@ -155,7 +150,6 @@ export function ChatPage() {
     turnsBySession,
     messages,
     streaming,
-    stages,
   ]);
 
   const sessions: Session[] = useMemo(
@@ -241,15 +235,15 @@ export function ChatPage() {
     return activeSessionId ? turnsBySession[activeSessionId] ?? [] : [];
   }, [turnsBySession, activeSessionId]);
 
-  const visibleMessages = useMemo(() => {
+  const visibleItems = useMemo(() => {
     const turns = activeSessionId
       ? turnsBySession[activeSessionId] ?? []
       : [];
-    return removeLiveMessageDuplicates(messages, turns);
+    return mergePersistedMessagesWithLiveTurns(messages, turns);
   }, [messages, turnsBySession, activeSessionId]);
 
   const showWelcomeCard =
-    !currentSessionStreaming && visibleMessages.length === 0 && filteredTurns.length === 0;
+    !currentSessionStreaming && visibleItems.length === 0;
   const workspaceStatus = useMemo(
     () =>
       resolveWorkspaceStatus({
@@ -308,7 +302,6 @@ export function ChatPage() {
   };
 
   const startStream = (params: PendingSend) => {
-    setStages({});
     setStreaming(params.localSessionId);
     setLastSend(params);
     let renderSessionId = params.localSessionId;
@@ -387,16 +380,6 @@ export function ChatPage() {
                 projectId: metaProject,
                 sessionId: metaSession,
               });
-              break;
-            }
-            case 'stage': {
-              const name = event.data.name as keyof StreamingStages | undefined;
-              if (name) {
-                setStages((prev) => ({
-                  ...prev,
-                  [mapStageName(name)]: event.data.label as string,
-                }));
-              }
               break;
             }
             case 'token': {
@@ -594,7 +577,6 @@ export function ChatPage() {
     setComposingNewSession(true);
     setActiveSessionId(null);
     setMessages([]);
-    setStages({});
     setRenamingSessionId(null);
     setSelectedSessionIds(new Set());
   };
@@ -691,7 +673,7 @@ export function ChatPage() {
   if (!activeProjectId && projects.length === 0) {
     return (
       <Card>
-        <Empty description="还没有任何项目。在下方输入第一条研究问题，系统会自动创建默认项目。" />
+        <Empty description="还没有项目" />
         <div style={{ marginTop: 16 }}>
           <ChatComposer
             input={input}
@@ -710,7 +692,6 @@ export function ChatPage() {
             guidedPaperId={guidedPaperId}
             onGuidedPaperChange={setGuidedPaperId}
             papers={papers}
-            stages={stages}
           />
         </div>
       </Card>
@@ -855,24 +836,20 @@ export function ChatPage() {
             <WelcomeCard onTemplate={handleQuickTemplate} />
           ) : (
             <>
-              {visibleMessages.map((item) => (
-                <ChatMessage
-                  key={item.id}
-                  message={item}
-                  projectId={activeProjectId}
-                  botAvatar={botAvatar}
-                />
-              ))}
-              {filteredTurns.map((item) => (
-                <ChatMessage
-                  key={item.id}
-                  turn={item}
-                  projectId={activeProjectId}
-                  botAvatar={botAvatar}
-                  onRetry={handleRetry}
-                  onPickPaper={() => navigate('/papers')}
-                />
-              ))}
+              {visibleItems.map((item) => {
+                const isPersistedMessage = 'session_id' in item;
+                return (
+                  <ChatMessage
+                    key={item.id}
+                    message={isPersistedMessage ? item : undefined}
+                    turn={isPersistedMessage ? undefined : item}
+                    projectId={activeProjectId}
+                    botAvatar={botAvatar}
+                    onRetry={isPersistedMessage ? undefined : handleRetry}
+                    onPickPaper={() => navigate('/papers')}
+                  />
+                );
+              })}
             </>
           )}
         </div>
@@ -893,30 +870,10 @@ export function ChatPage() {
           guidedPaperId={guidedPaperId}
           onGuidedPaperChange={setGuidedPaperId}
           papers={papers}
-          stages={stages}
         />
       </Card>
     </div>
   );
-}
-
-function mapStageName(name: string): keyof StreamingStages {
-  switch (name) {
-    case 'query_generation':
-      return 'queryGeneration';
-    case 'arxiv_search':
-      return 'paperSearch';
-    case 'recommendation':
-      return 'recommendation';
-    case 'persistence':
-      return 'persistence';
-    case 'evidence_collection':
-      return 'evidenceCollection';
-    case 'reading_guidance':
-      return 'readingGuidance';
-    default:
-      return 'queryGeneration';
-  }
 }
 
 // ─── Claude-style Chat Message ────────────────────────────────────────────────
@@ -947,6 +904,7 @@ function ChatMessage({
   const errorCode = turn?.errorCode;
   const mode = (message?.mode as ChatMode | undefined) ?? turn?.mode;
   const attachments = turn?.attachments ?? messageAttachments(message);
+  const hasSearchResults = attachments.some((attachment) => attachment.type === 'search_results');
 
   const goToPapers = () => {
     if (onPickPaper) onPickPaper();
@@ -1029,13 +987,15 @@ function ChatMessage({
             }
           />
         )}
-        <div className="assistant-bubble">
-          {content || pending ? (
-            <ClaudeStreamingContent content={content} pending={pending} />
-          ) : (
-            <span className="empty-reply">(空回复)</span>
-          )}
-        </div>
+        {!hasSearchResults && (
+          <div className="assistant-bubble">
+            {content || pending ? (
+              <ClaudeStreamingContent content={content} pending={pending} />
+            ) : (
+              <span className="empty-reply">(空回复)</span>
+            )}
+          </div>
+        )}
         {attachments.length > 0 && (
           <div className="chat-attachments">
             {attachments.map((att, idx) => (
@@ -1636,7 +1596,7 @@ function TopicGuidanceCardOffer({
       showIcon
       message={
         <Space wrap>
-          <span>已识别到最终选题方案，可整理为研究项目成果。</span>
+          <span>保存选题方案</span>
           <Button
             type="primary"
             size="small"
@@ -1717,7 +1677,7 @@ function FrameworkCardOffer({
       showIcon
       message={
         <Space wrap>
-          <span>已识别到最终方案，可整理为研究项目成果。</span>
+          <span>保存论文框架</span>
           <Button
             type="primary"
             size="small"
@@ -1749,7 +1709,6 @@ interface ChatComposerProps {
   guidedPaperId: string | null;
   onGuidedPaperChange: (id: string | null) => void;
   papers: Paper[];
-  stages: StreamingStages;
 }
 
 const INPUT_MAX_LENGTH = 4000;
@@ -1768,7 +1727,6 @@ function ChatComposer({
   guidedPaperId,
   onGuidedPaperChange,
   papers,
-  stages,
 }: ChatComposerProps) {
   const libraryPapers = papers.filter((paper) => paper.favorited || isUploaded(paper));
   const libraryPaperOptions = libraryPapers.map((paper) => {
@@ -1821,7 +1779,7 @@ function ChatComposer({
             options={libraryPaperOptions}
             notFoundContent={
               <span style={{ fontSize: 12 }}>
-                当前项目还没有可精读论文，请先在"论文库"上传 PDF，或收藏检索结果后导入解析。
+                暂无可精读论文
               </span>
             }
           />
@@ -1833,8 +1791,8 @@ function ChatComposer({
         autoSize={{ minRows: 3, maxRows: 10 }}
         placeholder={
           forcePaperReading
-            ? '围绕右侧论文提问，或说“开始精读”，导师会用追问引导你回到原文证据…'
-            : '描述你当前的研究问题或想探索的主题…'
+            ? '询问这篇论文…'
+            : '输入消息…'
         }
         maxLength={INPUT_MAX_LENGTH}
         showCount={false}
@@ -1875,7 +1833,6 @@ function ChatComposer({
           )}
         </Space>
       </div>
-      <StageProgress stages={stages} />
     </div>
   );
 }
@@ -1883,56 +1840,40 @@ function ChatComposer({
 // ─── Welcome Card ────────────────────────────────────────────────────────────
 
 function WelcomeCard({ onTemplate }: { onTemplate: (text: string) => void }) {
-  const cards: { title: string; icon: React.ReactNode; text: string; tag: string; color: string }[] = [
+  const cards: { title: string; icon: React.ReactNode; text: string }[] = [
     {
       title: '选题导师',
       icon: <ExperimentOutlined style={{ fontSize: 22, color: '#2b82f6' }} />,
       text: '请根据我的情况帮我选题',
-      tag: '选题',
-      color: 'geekblue',
     },
     {
       title: '框架搭建',
       icon: <BulbOutlined style={{ fontSize: 22, color: '#fa8c16' }} />,
       text: '帮我搭建论文框架',
-      tag: '框架',
-      color: 'orange',
     },
     {
       title: '文献查找',
       icon: <SearchOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
       text: '帮我检索[启发式算法]相关论文',
-      tag: '文献发现',
-      color: 'purple',
     },
     {
       title: '论文精读',
       icon: <ReadOutlined style={{ fontSize: 22, color: '#52c41a' }} />,
       text: '帮我精读这篇论文',
-      tag: '精读',
-      color: 'green',
     },
   ];
   return (
     <div
       style={{
-        background: 'linear-gradient(180deg, #f0f5ff 0%, #ffffff 100%)',
+        background: '#fff',
         borderRadius: 12,
         padding: 28,
         border: '1px solid #e6ebf5',
       }}
     >
-      <Space align="start" size={12}>
-        <span style={{ fontSize: 32 }}>👋</span>
-        <div>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            开始你的研究之旅
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            从以下功能开始，或直接描述你的研究主题。
-          </Typography.Text>
-        </div>
-      </Space>
+      <Typography.Title level={4} style={{ margin: 0 }}>
+        开始研究
+      </Typography.Title>
       <div
         style={{
           marginTop: 20,
@@ -1970,14 +1911,7 @@ function WelcomeCard({ onTemplate }: { onTemplate: (text: string) => void }) {
             <Space align="center">
               {c.icon}
               <Typography.Text strong>{c.title}</Typography.Text>
-              <Tag color={c.color}>{c.tag}</Tag>
             </Space>
-            <Typography.Paragraph
-              type="secondary"
-              style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}
-            >
-              {c.text}
-            </Typography.Paragraph>
           </div>
         ))}
       </div>

@@ -44,28 +44,38 @@ interface TurnLike extends MessageLike {
 }
 
 
-export function removeLiveMessageDuplicates<T extends MessageLike>(
-  messages: T[],
-  turns: TurnLike[],
-): T[] {
-  const remaining = new Map<string, number>();
-  for (const turn of turns) {
+export function mergePersistedMessagesWithLiveTurns<
+  TMessage extends MessageLike,
+  TTurn extends TurnLike,
+>(messages: TMessage[], turns: TTurn[]): Array<TMessage | TTurn> {
+  const turnIndexesByContent = new Map<string, number[]>();
+  for (let index = 0; index < turns.length; index += 1) {
+    const turn = turns[index];
     if (turn.pending || !turn.content) continue;
     const key = `${turn.role}\u0000${turn.content}`;
-    remaining.set(key, (remaining.get(key) ?? 0) + 1);
+    const indexes = turnIndexesByContent.get(key) ?? [];
+    indexes.push(index);
+    turnIndexesByContent.set(key, indexes);
   }
 
-  const kept: T[] = [];
+  const replacementByMessageIndex = new Map<number, number>();
+  const matchedTurnIndexes = new Set<number>();
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     const key = `${message.role}\u0000${message.content}`;
-    const count = remaining.get(key) ?? 0;
-    if (count > 0) {
-      remaining.set(key, count - 1);
-      continue;
-    }
-    kept.push(message);
+    const indexes = turnIndexesByContent.get(key);
+    const turnIndex = indexes?.pop();
+    if (turnIndex === undefined) continue;
+    replacementByMessageIndex.set(index, turnIndex);
+    matchedTurnIndexes.add(turnIndex);
   }
-  kept.reverse();
-  return kept;
+
+  const merged: Array<TMessage | TTurn> = messages.map((message, index) => {
+    const turnIndex = replacementByMessageIndex.get(index);
+    return turnIndex === undefined ? message : turns[turnIndex];
+  });
+  for (let index = 0; index < turns.length; index += 1) {
+    if (!matchedTurnIndexes.has(index)) merged.push(turns[index]);
+  }
+  return merged;
 }

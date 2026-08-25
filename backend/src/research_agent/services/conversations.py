@@ -500,14 +500,6 @@ class ConversationService:
         session_id: str,
         content: str,
     ) -> AsyncIterator[StreamEvent]:
-        yield StreamEvent(
-            event="stage",
-            data={"name": "query_generation", "label": "生成检索式"},
-        )
-        yield StreamEvent(
-            event="stage",
-            data={"name": "arxiv_search", "label": "检索论文数据库"},
-        )
         if self.model_gateway is None:
             service = LocalLiteratureDiscoveryService(self.arxiv_provider)
             result = await service.discover(content)
@@ -520,21 +512,14 @@ class ConversationService:
                 project_id=project_id,
             )
             result, artifact = await svc.discover_with_artifact(content)
-        yield StreamEvent(
-            event="stage",
-            data={"name": "recommendation", "label": "生成推荐卡片"},
-        )
-        yield StreamEvent(
-            event="stage",
-            data={"name": "persistence", "label": "缓存检索结果"},
-        )
         PaperRepository(self.db).upsert_arxiv_papers(
             project_id,
             _papers_to_cache(result),
         )
         rec_count = len(result.recommendations)
+        query_count = len(result.query_executions)
         summary = (
-            f"已根据你的问题检索了论文数据库，"
+            f"已根据你的问题执行 {query_count} 组检索，"
             f"从 {len(result.candidates)} 篇候选中筛选出 {rec_count} 篇推荐文献。"
             "收藏后才会进入论文库，并可用于导入、精读和对比。"
         )
@@ -571,14 +556,6 @@ class ConversationService:
         content: str,
         history,
     ) -> AsyncIterator[StreamEvent]:
-        yield StreamEvent(
-            event="stage",
-            data={"name": "evidence_collection", "label": "收集论文证据"},
-        )
-        yield StreamEvent(
-            event="stage",
-            data={"name": "reading_guidance", "label": "生成阅读反馈"},
-        )
         result = None
         async for event in GuidedReadingService(
             db=self.db,

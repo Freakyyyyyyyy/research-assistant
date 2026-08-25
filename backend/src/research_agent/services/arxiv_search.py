@@ -1,5 +1,6 @@
 import asyncio
 import re
+import threading
 from typing import List, Protocol
 
 import arxiv
@@ -71,6 +72,7 @@ class ArxivClientSearchProvider:
             delay_seconds=3.0,
             num_retries=3,
         )
+        self._client_lock = threading.Lock()
 
     async def search(self, query: str) -> List[ArxivPaper]:
         search = arxiv.Search(
@@ -79,5 +81,11 @@ class ArxivClientSearchProvider:
             sort_by=arxiv.SortCriterion.Relevance,
             sort_order=arxiv.SortOrder.Descending,
         )
-        results = await asyncio.to_thread(lambda: list(self._client.results(search)))
+        def execute_search():
+            # arxiv.Client tracks request timing internally. A lock keeps that
+            # rate limiter correct when a query plan schedules several searches.
+            with self._client_lock:
+                return list(self._client.results(search))
+
+        results = await asyncio.to_thread(execute_search)
         return arxiv_results_to_papers(results)

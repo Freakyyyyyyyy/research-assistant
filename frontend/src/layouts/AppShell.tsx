@@ -36,7 +36,7 @@ const ROUTE_TITLES: Record<string, string> = {
   chat: '对话工作台',
   papers: '论文库',
   artifacts: '研究项目成果',
-  settings: '系统设置与诊断',
+  settings: '系统设置',
 };
 
 const HEALTH_POLL_INTERVAL_MS = 15_000;
@@ -209,9 +209,6 @@ export function AppShell() {
           <Typography.Title level={5} style={{ margin: 0 }}>
             研究能力训练助手
           </Typography.Title>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            论文阅读 · 文献发现 · 选题指导 · 框架搭建
-          </Typography.Text>
         </div>
         <div style={{ padding: '0 16px 12px' }}>
           <Space.Compact style={{ width: '100%' }}>
@@ -253,12 +250,6 @@ export function AppShell() {
               />
             </Popconfirm>
           </Space.Compact>
-          <Typography.Paragraph
-            type="secondary"
-            style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}
-          >
-            创建新项目后自动进入对话工作台。
-          </Typography.Paragraph>
           <Button
             block
             type="dashed"
@@ -279,51 +270,9 @@ export function AppShell() {
             { key: 'chat', icon: <MessageOutlined />, label: '对话工作台' },
             { key: 'papers', icon: <BookOutlined />, label: '论文库' },
             { key: 'artifacts', icon: <FileTextOutlined />, label: '研究项目成果' },
-            { key: 'settings', icon: <SettingOutlined />, label: '系统设置与诊断' },
+            { key: 'settings', icon: <SettingOutlined />, label: '系统设置' },
           ]}
         />
-        <div style={{ position: 'absolute', bottom: 12, left: 16, right: 16 }}>
-          <Space direction="vertical" size={6} style={{ width: '100%' }}>
-            <Space size={4} wrap>
-              <Tag
-                color={
-                  healthOk === true ? 'green' : healthOk === false ? 'red' : 'default'
-                }
-                style={{ margin: 0 }}
-              >
-                <span style={{ marginRight: 4 }}>
-                  {healthOk === null ? '○' : healthOk ? '●' : '●'}
-                </span>
-                {healthOk === null
-                  ? '检测中'
-                  : healthOk
-                    ? '后端在线'
-                    : '后端离线'}
-              </Tag>
-              {settings && (
-                <Tag
-                  color={settings.model_configured ? 'blue' : 'orange'}
-                  style={{ margin: 0 }}
-                >
-                  {settings.model_configured ? '模型已配置' : '模型未配置'}
-                </Tag>
-              )}
-              {settings && (
-                <Tag
-                  color={settings.ocr_configured ? 'cyan' : 'default'}
-                  style={{ margin: 0 }}
-                >
-                  {settings.ocr_configured ? 'OCR 已配置' : 'OCR 未配置'}
-                </Tag>
-              )}
-            </Space>
-            {activeProject && (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                当前项目：{activeProject.name}
-              </Typography.Text>
-            )}
-          </Space>
-        </div>
       </Sider>
       <Layout>
         <Header
@@ -360,7 +309,7 @@ export function AppShell() {
               <Space direction="vertical" align="center">
                 <Spin />
                 <Typography.Text type="secondary">
-                  正在加载后端状态…
+                  加载中…
                 </Typography.Text>
               </Space>
             </div>

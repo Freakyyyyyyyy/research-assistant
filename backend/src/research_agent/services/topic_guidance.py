@@ -6,8 +6,6 @@ from typing import AsyncIterator, Dict, List
 
 from sqlalchemy.orm import Session
 
-from research_agent.db.models import Artifact
-from research_agent.repositories.artifacts import ArtifactRepository
 from research_agent.services.model_call_logging import record_model_call
 from research_agent.services.model_gateway import ModelGateway, collect_chat
 

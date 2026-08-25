@@ -221,9 +221,6 @@ PRIVACY_DATA_TTL_DAYS=0`;
 
       <Card title="配置诊断">
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
-            点击「运行诊断」可验证存储、OCR 和模型连通性。诊断接口不会回显模型输出、完整异常或本地 .env 内容。
-          </Typography.Paragraph>
           <Button
             type="primary"
             icon={<ReloadOutlined />}
@@ -379,7 +376,7 @@ PRIVACY_DATA_TTL_DAYS=0`;
               overflow: 'auto',
             }}
           >
-            {`& 'E:\\anaconda927\\envs\\py39232\\python.exe' -m uvicorn research_agent.main:app --app-dir backend/src --host 127.0.0.1 --port 8000 --reload`}
+            {`python -m uvicorn research_agent.main:app --app-dir backend/src --host 127.0.0.1 --port 8000 --reload`}
           </pre>
           <Typography.Paragraph>
             <strong>启动前端</strong>（在项目根目录运行）：
@@ -398,7 +395,7 @@ PRIVACY_DATA_TTL_DAYS=0`;
           <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
             访问前端：<code>http://127.0.0.1:5173</code>
             &nbsp;&nbsp;API 文档：<code>http://127.0.0.1:8000/docs</code>
-            &nbsp;&nbsp;Windows 一键启动：<code>dev-start.bat</code>
+              &nbsp;&nbsp;Windows 启动脚本：<code>dev-start.bat</code>
           </Typography.Paragraph>
         </Space>
       </Card>

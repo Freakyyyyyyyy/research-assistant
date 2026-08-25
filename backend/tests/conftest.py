@@ -13,8 +13,11 @@ class ApiFakeGateway:
     async def stream_chat(self, messages):
         prompt = messages[-1]["content"]
         full_prompt = "\n".join(item.get("content", "") for item in messages)
-        if "英文检索式" in prompt:
-            yield '{"english_query":"vehicle routing"}'
+        if "检索策略专家" in full_prompt:
+            yield (
+                '{"is_broad":false,"core_query":"vehicle routing",'
+                '"subqueries":[]}'
+            )
         elif "候选文献" in prompt:
             yield (
                 '[{"arxiv_id":"2401.00001","reason":"高度相关",'

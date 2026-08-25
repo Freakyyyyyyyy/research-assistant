@@ -2,9 +2,7 @@ import {
   BulbOutlined,
   DownloadOutlined,
   ExperimentOutlined,
-  FileSearchOutlined,
   LinkOutlined,
-  RocketOutlined,
   StarOutlined,
   StarFilled,
 } from '@ant-design/icons';
@@ -40,7 +38,6 @@ function getArr(v: unknown): unknown[] {
 
 export function SearchResults({ data, activeProjectId }: SearchResultsProps) {
   const payload = data as {
-    query?: unknown;
     candidates?: unknown[];
     recommendations?: unknown[];
   };
@@ -65,20 +62,8 @@ export function SearchResults({ data, activeProjectId }: SearchResultsProps) {
 
   return (
     <div>
-      <Typography.Paragraph style={{ marginBottom: 8 }}>
-        <Space size={6} wrap>
-          <Tag color="purple">检索式</Tag>
-          <code>{getStr(payload.query)}</code>
-          <Tag icon={<FileSearchOutlined />} color="blue">
-            候选 {candidates.length} 篇
-          </Tag>
-          <Tag icon={<RocketOutlined />} color="green">
-            推荐 {recommendations.length} 篇
-          </Tag>
-        </Space>
-      </Typography.Paragraph>
-      <Typography.Title level={5} style={{ marginTop: 12 }}>
-        <BulbOutlined /> 为你推荐的文献
+      <Typography.Title level={5} style={{ marginTop: 0 }}>
+        <BulbOutlined /> 推荐文献
       </Typography.Title>
       <Space direction="vertical" size={8} style={{ width: '100%' }}>
         {recommendations.map((r: unknown, idx: number) => {
@@ -114,7 +99,6 @@ export function SearchResults({ data, activeProjectId }: SearchResultsProps) {
           .map((c: unknown, idx: number) => {
             const paper = c as PaperLike;
             const candidateLabels = buildCandidateLabels(paper);
-            const candidateSummary = buildCandidateSummary(paper);
             return (
               <PaperCard
                 key={idx}
@@ -125,7 +109,6 @@ export function SearchResults({ data, activeProjectId }: SearchResultsProps) {
                 entryUrl={getStr(paper.entry_url)}
                 pdfUrl={getStr(paper.pdf_url)}
                 arxivId={getStr(paper.arxiv_id)}
-                reason={candidateSummary}
                 purposeLabels={candidateLabels}
                 initialFavorited={false}
                 activeProjectId={activeProjectId}
@@ -167,31 +150,6 @@ function buildCandidateLabels(paper: PaperLike): string[] {
   }
   if (!labels.length) labels.push('候选文献');
   return labels;
-}
-
-function buildCandidateSummary(paper: PaperLike): string {
-  const labels = buildCandidateLabels(paper).filter((label) => label !== '候选文献');
-  const year = extractYear(getStr((paper as { published?: unknown }).published));
-  const focus = labels.length
-    ? labels.slice(0, 2).join('、')
-    : inferTitleFocus(getStr(paper.title));
-  const yearText = year ? `，属于${year}年的相关研究` : '';
-  return `该文献围绕${focus}展开${yearText}，可作为理解相关方法、应用场景或研究背景的候选文献。`;
-}
-
-function extractYear(value: string): string {
-  const match = value.match(/\b(19|20)\d{2}\b/);
-  return match?.[0] ?? '';
-}
-
-function inferTitleFocus(title: string): string {
-  const cleaned = title
-    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
-    .split(/\s+/)
-    .filter((word) => word.length > 3)
-    .slice(0, 4)
-    .join(' ');
-  return cleaned ? `“${cleaned}”相关问题` : '当前检索主题';
 }
 
 function PaperCard(props: {

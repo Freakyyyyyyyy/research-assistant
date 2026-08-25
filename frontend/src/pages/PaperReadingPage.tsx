@@ -23,7 +23,8 @@ import {
 import { api, streamChat, type ChatStreamHandle } from '@/api/client';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { useAppStore, type ChatTurn } from '@/store/app';
-import type { Paper, StreamEvent } from '@/types/api';
+import type { Message, Paper, StreamEvent } from '@/types/api';
+import { mergePersistedMessagesWithLiveTurns } from '@/utils/sessionFlow';
 
 const { TextArea } = Input;
 
@@ -59,6 +60,16 @@ function parseAuthors(value: string): string[] {
   }
 }
 
+function toReadingTurns(messages: Message[]): ReadingTurn[] {
+  return messages
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .map((message) => ({
+      id: message.id,
+      role: message.role as 'user' | 'assistant',
+      content: message.content,
+    }));
+}
+
 export function PaperReadingPage() {
   const { paperId } = useParams<{ paperId: string }>();
   const [searchParams] = useSearchParams();
@@ -71,22 +82,49 @@ export function PaperReadingPage() {
   const [sessionId, setSessionId] = useState<string | null>(pageSessionId);
   const [input, setInput] = useState('请带我精读这篇论文。');
   const [turns, setTurns] = useState<ReadingTurn[]>([]);
+  const [persistedTurns, setPersistedTurns] = useState<ReadingTurn[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [pdfLoaded, setPdfLoaded] = useState(false);
   const [pdfReloadKey, setPdfReloadKey] = useState(0);
   const streamRef = useRef<ChatStreamHandle | null>(null);
+  const sessionIdRef = useRef<string | null>(pageSessionId);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const authors = useMemo(
     () => (paper ? parseAuthors(paper.authors_json).join(', ') : ''),
     [paper],
   );
-  const sessionTurns = pageSessionId ? turnsBySession[pageSessionId] ?? [] : [];
-  const displayTurns: ReadingDisplayTurn[] = [...sessionTurns, ...turns];
+  const sessionTurns = sessionId ? turnsBySession[sessionId] ?? [] : [];
+  const displayTurns: ReadingDisplayTurn[] = mergePersistedMessagesWithLiveTurns(
+    persistedTurns,
+    [...sessionTurns, ...turns],
+  );
 
   useEffect(() => {
-    if (pageSessionId) setSessionId(pageSessionId);
+    if (pageSessionId) {
+      setSessionId(pageSessionId);
+      sessionIdRef.current = pageSessionId;
+    }
   }, [pageSessionId]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!sessionId) {
+      setPersistedTurns([]);
+      return;
+    }
+    api
+      .listSessionMessages(sessionId)
+      .then((response) => {
+        if (alive) setPersistedTurns(toReadingTurns(response.messages));
+      })
+      .catch((error) => {
+        if (alive) console.error('Failed to load reading history', error);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     let alive = true;
@@ -155,7 +193,10 @@ export function PaperReadingPage() {
   const handleEvent = (event: StreamEvent, assistantId: string) => {
     if (event.event === 'metadata') {
       const nextSessionId = event.data.session_id as string | undefined;
-      if (nextSessionId) setSessionId(nextSessionId);
+      if (nextSessionId) {
+        setSessionId(nextSessionId);
+        sessionIdRef.current = nextSessionId;
+      }
       return;
     }
     if (event.event === 'token') {
@@ -222,6 +263,12 @@ export function PaperReadingPage() {
           patchAssistant(assistantId, { pending: false });
           setStreaming(false);
           streamRef.current = null;
+          const completedSessionId = sessionIdRef.current;
+          if (completedSessionId) {
+            void api.listSessionMessages(completedSessionId).then((response) => {
+              setPersistedTurns(toReadingTurns(response.messages));
+            });
+          }
         },
       },
     );
@@ -231,6 +278,14 @@ export function PaperReadingPage() {
     streamRef.current?.close();
     streamRef.current = null;
     setStreaming(false);
+  };
+
+  const returnToChat = () => {
+    const params = new URLSearchParams();
+    if (paper?.project_id) params.set('project', paper.project_id);
+    if (sessionId) params.set('session', sessionId);
+    const query = params.toString();
+    navigate(query ? `/chat?${query}` : '/chat');
   };
 
   if (loading) {
@@ -250,7 +305,7 @@ export function PaperReadingPage() {
           message="论文加载失败"
           description={loadError}
           action={
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/chat')}>
+            <Button icon={<ArrowLeftOutlined />} onClick={returnToChat}>
               返回主工作台
             </Button>
           }
@@ -264,7 +319,7 @@ export function PaperReadingPage() {
       <Card styles={{ body: { padding: '12px 16px' } }}>
         <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
           <Space align="start">
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/chat')}>
+            <Button icon={<ArrowLeftOutlined />} onClick={returnToChat}>
               返回主工作台
             </Button>
             <Space direction="vertical" size={2}>

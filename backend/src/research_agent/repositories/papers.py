@@ -61,7 +61,7 @@ class PaperRepository:
                 select(Paper)
                 .where(
                     Paper.project_id == project_id,
-                    (Paper.favorited == True) | (Paper.arxiv_id.like("upload:%")),
+                    Paper.favorited.is_(True) | Paper.arxiv_id.like("upload:%"),
                 )
                 .order_by(Paper.created_at.desc())
                 .limit(limit)
@@ -75,7 +75,7 @@ class PaperRepository:
                 select(Paper)
                 .where(
                     Paper.project_id == project_id,
-                    (Paper.favorited == True) | (Paper.arxiv_id.like("upload:%")),
+                    Paper.favorited.is_(True) | Paper.arxiv_id.like("upload:%"),
                 )
                 .order_by(Paper.created_at.desc())
             )
